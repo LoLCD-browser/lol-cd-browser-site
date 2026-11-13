@@ -1,6 +1,311 @@
 
 <!DOCTYPE html>
+<html lang="ja"><!DOCTYPE html>
 <html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoL CD Browser</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0d121b;color:#eee;font-family:Arial,sans-serif;padding:22px}
+.container{max-width:1100px;margin:auto}
+h1{color:#c8aa6e} h2{font-size:19px}
+.panel,.champ{background:#172231;border:1px solid #34445a;border-radius:12px;padding:18px;margin:15px 0}
+input,select{background:#0d1724;color:white;border:1px solid #46566c;border-radius:7px;padding:10px;width:100%;min-width:0}
+label{display:block;font-size:13px;color:#aebdce;margin-bottom:5px}
+button{background:#24374d;color:white;border:1px solid #52647a;padding:8px 12px;border-radius:6px;cursor:pointer}
+button:hover{background:#36516d} button:disabled{opacity:.5;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.champ{min-width:0;margin:0}
+.champhead{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.portrait{width:65px;height:65px;border-radius:8px}
+.skill{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #34445a}
+.skill:last-child{border:0}.skill img{width:46px;height:46px;border-radius:7px}
+.skillinfo{flex:1;min-width:0}.skillname{font-weight:bold}
+.muted{color:#98a9bc;font-size:12px}.cd{font-size:20px;font-weight:bold;color:#e8c879;text-align:right;white-space:nowrap}
+.small{font-size:11px;color:#9babc0}.level{width:65px;padding:5px}.special-mode{width:auto;max-width:100%;padding:6px;margin-top:4px}
+.spell{display:flex;align-items:center;gap:10px}.spell img{width:40px;height:40px}
+.row{display:flex;gap:12px;align-items:center}.row>*{flex:1}.status{color:#9db6d1;font-size:13px}
+.admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.rule-item{border-top:1px solid #34445a;padding:10px 0;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.rule-item>div:first-child{min-width:0}.actions{display:flex;gap:6px;flex-wrap:wrap}
+.notice{padding:10px;border-radius:7px;background:#101b29;color:#b9c9dc;font-size:12px;margin-top:8px}
+.hidden{display:none!important}
+@media(max-width:650px){.grid,.admin-grid{grid-template-columns:1fr}body{padding:12px}.row{flex-direction:column;align-items:stretch}.skill{align-items:flex-start}.cd{font-size:17px}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>⚔ LoL Skill CD Browser</h1>
+<p class="muted" id="patch">データ読み込み中...</p>
+<p class="status" id="status">Data Dragonに接続しています...</p>
+
+<div class="panel">
+<h2>🔍 チャンピオン検索</h2>
+<label>検索（日本語・英語）</label><input id="search" placeholder="例：アーリ / Ahri">
+<div class="row" style="margin-top:12px">
+<div><label>チャンピオン①</label><select id="champ1"></select></div>
+<div><label>チャンピオン②</label><select id="champ2"></select></div>
+</div>
+<label style="margin-top:12px"><input type="checkbox" id="compare" style="width:auto"> 2体を比較する</label>
+</div>
+
+<div class="panel">
+<h2>⚙ クールタイム計算設定</h2>
+<div class="row">
+<div><label>基本Ability Haste</label><input id="haste" type="number" min="0" max="500" value="0"></div>
+<div><label>追加Ability Haste</label><input id="extra" type="number" min="0" max="500" value="0"></div>
+</div>
+<div style="margin-top:15px">
+<label><input id="runeAH" type="checkbox" style="width:auto"> ルーン：スキルヘイスト +8</label>
+<label><input id="runeSS" type="checkbox" style="width:auto"> ルーン：サモナースペルヘイスト +18（Cosmic Insight）</label>
+</div>
+<div class="muted" style="margin-top:10px">スキルヘイスト合計：<strong id="totalAH">0</strong> AH<br>サモナースペルヘイスト：<strong id="totalSS">0</strong></div>
+</div>
+
+<div id="results" class="grid"></div>
+
+<div class="panel">
+<h2>✨ Summoner Spells</h2>
+<div class="row">
+<div><label>スペル①</label><select id="sum1"></select><div id="sumResult1" class="spell" style="margin-top:10px"></div></div>
+<div><label>スペル②</label><select id="sum2"></select><div id="sumResult2" class="spell" style="margin-top:10px"></div></div>
+</div>
+<p class="muted">基本CDとサモナースペルヘイスト適用後のCDを表示します。</p>
+</div>
+
+<section class="panel">
+<h2>🔐 管理者ログイン</h2>
+<div id="authLoggedOut">
+<div class="row">
+<div><label>管理者メールアドレス</label><input id="loginEmail" type="email" autocomplete="username" placeholder="メールアドレス"></div>
+<div><label>パスワード</label><input id="loginPassword" type="password" autocomplete="current-password" placeholder="パスワード"></div>
+</div>
+<button id="loginBtn" style="margin-top:10px">ログイン</button>
+</div>
+<div id="authLoggedIn" class="hidden">
+<p id="loginStatus" class="status"></p><button id="logoutBtn">ログアウト</button>
+</div>
+<p id="authMessage" class="muted">特殊CDルールはSupabaseから読み込みます。編集できるのは管理者だけです。</p>
+</section>
+
+<section class="panel hidden" id="adminPanel">
+<h2>🛠 特殊CDルール管理（管理者専用）</h2>
+<p class="muted">登録したルールはSupabaseに保存され、サイト利用者全員に共有されます。</p>
+<form id="ruleForm">
+<input id="ruleId" type="hidden">
+<div class="admin-grid">
+<div><label>チャンピオン</label><select id="ruleChampion"></select></div>
+<div><label>対象スキル</label><select id="ruleSlot"><option>Q</option><option>W</option><option>E</option><option>R</option></select></div>
+<div><label>ルール名</label><input id="ruleLabel" required maxlength="100" placeholder="例：敵チャンピオン命中"></div>
+<div><label>発動条件・メモ</label><input id="ruleCondition" required maxlength="500" placeholder="例：進化後のWが敵チャンピオンに命中"></div>
+<div><label>CDの変化</label><select id="ruleEffect"><option value="percent_refund">割合返還（%）</option><option value="flat_refund">秒数短縮（秒）</option><option value="fixed">CDを指定秒数にする</option><option value="reset">CDを0秒にリセット</option></select></div>
+<div><label>数値（割合または秒数）</label><input id="ruleAmount" type="number" min="0" max="100" step="0.01" value="50"></div>
+</div>
+<div class="actions" style="margin-top:12px"><button type="submit" id="saveRuleBtn">ルールを保存</button><button type="button" id="cancelEditBtn">入力をクリア</button></div>
+</form>
+<div class="notice">割合返還・秒数短縮は、Ability Haste適用後のCDに対して計算します。条件の発動はゲーム内から自動検知せず、各スキル欄で利用者が選択します。</div>
+<h3>登録済みルール</h3><div id="ruleList" class="muted">読み込み中...</div>
+</section>
+
+<p class="muted" style="text-align:center">Data source: Riot Games Data Dragon</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const BASE="https://ddragon.leagueoflegends.com";
+const SUPABASE_URL="https://xuxytomgmigossugbvnm.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY="sb_publishable_RUotUs9M7wnYyZD91-OIvA_NuCJpg9m";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+let version="",champions=[],summoners=[],cache={},customRules=[];
+const $=id=>document.getElementById(id);
+const state={levels:{},specialModes:{}};
+
+function totalAH(){return Math.max(0,Number($("haste").value)||0)+Math.max(0,Number($("extra").value)||0)+($("runeAH").checked?8:0)}
+function totalSS(){return $("runeSS").checked?18:0}
+function calculateCD(base,haste){return Number(base)/(1+haste/100)}
+function formatCD(n){return Number(n).toFixed(2)+"秒"}
+function championImage(id){return `${BASE}/cdn/${version}/img/champion/${id}.png`}
+function spellImage(name){return `${BASE}/cdn/${version}/img/spell/${name}`}
+function escapeHTML(value){return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+async function loadSharedRules(){
+ const {data,error}=await db.from("special_cd_rules").select("*").order("created_at",{ascending:true});
+ if(error){console.error(error);$("status").textContent="特殊CDルールの読み込みに失敗しました: "+error.message;return}
+ customRules=data||[];
+ renderRuleList();
+ if(champions.length)await render();
+}
+async function refreshAuth(){
+ const {data:{session}}=await db.auth.getSession();
+ $("authLoggedOut").classList.toggle("hidden",!!session);
+ $("authLoggedIn").classList.toggle("hidden",!session);
+ if(!session){$("adminPanel").classList.add("hidden");$("authMessage").textContent="管理者アカウントでログインしてください。";return}
+ $("loginStatus").textContent="ログイン中："+session.user.email;
+ const {data,isAdmin,error}=await db.rpc("is_admin");
+ const allowed=!error&&(data===true||isAdmin===true);
+ $("adminPanel").classList.toggle("hidden",!allowed);
+ $("authMessage").textContent=allowed?"管理者として認証されています。": "ログイン済みですが管理者権限がありません。Supabaseのadmin_users登録を確認してください。";
+ if(error)console.error("is_admin RPC:",error);
+}
+async function login(){
+ const email=$("loginEmail").value.trim(),password=$("loginPassword").value;
+ if(!email||!password){$("authMessage").textContent="メールアドレスとパスワードを入力してください。";return}
+ $("loginBtn").disabled=true;
+ const {error}=await db.auth.signInWithPassword({email,password});
+ $("loginBtn").disabled=false;
+ $("authMessage").textContent=error?"ログイン失敗: "+error.message:"ログインしました。";
+ await refreshAuth();
+}
+async function logout(){await db.auth.signOut();await refreshAuth()}
+function clearRuleForm(){$("ruleForm").reset();$("ruleId").value="";$("ruleAmount").value=50;$("saveRuleBtn").textContent="ルールを保存"}
+function renderRuleList(){
+ if(!customRules.length){$("ruleList").textContent="まだルールは登録されていません。";return}
+ $("ruleList").innerHTML=customRules.map(r=>`<div class="rule-item"><div><strong>${escapeHTML(r.champion_id)} ${escapeHTML(r.slot)}：${escapeHTML(r.label)}</strong><div class="small">${escapeHTML(r.condition_text)} / ${escapeHTML(r.effect)} ${r.amount}</div></div><div class="actions"><button type="button" data-edit-rule="${escapeHTML(r.id)}">編集</button><button type="button" data-delete-rule="${escapeHTML(r.id)}">削除</button></div></div>`).join("");
+}
+function editRule(id){
+ const r=customRules.find(x=>x.id===id);if(!r)return;
+ $("ruleId").value=r.id;$("ruleChampion").value=r.champion_id;$("ruleSlot").value=r.slot;
+ $("ruleLabel").value=r.label;$("ruleCondition").value=r.condition_text;
+ $("ruleEffect").value=r.effect;$("ruleAmount").value=r.amount;
+ $("saveRuleBtn").textContent="変更を保存";$("ruleForm").scrollIntoView({behavior:"smooth",block:"center"});
+}
+async function saveRule(e){
+ e.preventDefault();
+ const effect=$("ruleEffect").value,amount=Number($("ruleAmount").value);
+ if(!Number.isFinite(amount)||amount<0||(effect==="percent_refund"&&amount>100)){alert("数値を確認してください。割合返還は0〜100です。");return}
+ const oldId=$("ruleId").value;
+ const row={id:oldId||crypto.randomUUID(),champion_id:$("ruleChampion").value,slot:$("ruleSlot").value,label:$("ruleLabel").value.trim(),condition_text:$("ruleCondition").value.trim(),effect,amount};
+ $("saveRuleBtn").disabled=true;
+ const {error}=await db.from("special_cd_rules").upsert(row);
+ $("saveRuleBtn").disabled=false;
+ if(error){alert("保存できませんでした: "+error.message);return}
+ clearRuleForm();await loadSharedRules();alert("特殊CDルールをSupabaseに保存しました。");
+}
+async function deleteRule(id){
+ if(!confirm("この特殊CDルールを削除しますか？"))return;
+ const {error}=await db.from("special_cd_rules").delete().eq("id",id);
+ if(error){alert("削除できませんでした: "+error.message);return}
+ await loadSharedRules();
+}
+function customRuleFor(id,slot,ruleId){return customRules.find(r=>r.id===ruleId&&r.champion_id===id&&r.slot===slot)}
+function applyCustomRule(base,haste,rule){
+ let cd=calculateCD(base,haste);
+ if(!rule)return cd;
+ if(rule.effect==="percent_refund")return cd*(1-Number(rule.amount)/100);
+ if(rule.effect==="flat_refund")return Math.max(0,cd-Number(rule.amount));
+ if(rule.effect==="fixed")return Math.max(0,Number(rule.amount));
+ if(rule.effect==="reset")return 0;
+ return cd;
+}
+function getLevel(id,slot){return state.levels[id+"_"+slot]||1}
+function setLevel(id,slot,value){state.levels[id+"_"+slot]=Math.max(1,Math.min(slot==="R"?3:5,value))}
+function getSpecialRule(id,slot){return ({"Pantheon_Q":{status:"implemented"},"Diana_E":{status:"implemented"},"Kaisa_W":{status:"implemented"},"Thresh_Q":{status:"implemented"},"Ezreal_Q":{status:"implemented"}})[id+"_"+slot]||null}
+function getSpecialMode(id,slot){if(id==="Pantheon"&&slot==="Q")return "pantheonQ";if(id==="Diana"&&slot==="E")return "dianaE";if(id==="Kaisa"&&slot==="W")return "kaisaW";return null}
+function getSpecialModeValue(id,slot){return state.specialModes[id+"_"+slot]||"normal"}
+function specialCooldown(id,slot,base,haste){
+ const mode=getSpecialMode(id,slot),value=getSpecialModeValue(id,slot);
+ if(mode==="pantheonQ"&&value==="tap")return calculateCD(base*.4,haste);
+ if(mode==="dianaE"&&value==="moonlight")return .25;
+ if(mode==="kaisaW"&&value==="evolvedHit")return calculateCD(base*.25,haste);
+ let result=calculateCD(base,haste);
+ if(id==="Thresh"&&slot==="Q"&&value==="hit")result=Math.max(0,result-2);
+ if(id==="Ezreal"){const hits=Math.max(0,Number(state.specialModes.Ezreal_Q_hits)||0);result=Math.max(0,result-1.5*hits)}
+ return result;
+}
+function createChampionCard(c){
+ const id=c.id,h=totalAH();
+ let html=`<div class="champ"><div class="champhead"><img class="portrait" src="${championImage(id)}"><div><h2>${escapeHTML(c.name)}</h2><div class="muted">${escapeHTML(c.title)}</div><div class="muted">${(c.tags||[]).map(escapeHTML).join(" / ")}</div></div></div><h3>スキルクールタイム</h3><div class="small" style="margin-bottom:10px">特殊CD情報が未登録のスキルは通常CDで計算します。</div>`;
+ if(id==="Ezreal")html+=`<div style="margin:8px 0 12px"><label>Qの命中回数（1回ごとに全スキルCDを1.5秒短縮）</label><select class="special-mode" data-champ="Ezreal" data-slot="Q_hits">${[0,1,2,3,4,5].map(n=>`<option value="${n}" ${Number(state.specialModes.Ezreal_Q_hits||0)===n?"selected":""}>${n}回</option>`).join("")}</select></div>`;
+ ["Q","W","E","R"].forEach((slot,i)=>{
+  const s=c.spells[i],level=getLevel(id,slot),max=slot==="R"?3:5,base=Number(s.cooldown[level-1]||0);
+  const special=getSpecialMode(id,slot),modeValue=getSpecialModeValue(id,slot);
+  const available=customRules.filter(r=>r.champion_id===id&&r.slot===slot);
+  const selectedId=state.specialModes[id+"_"+slot+"_custom"]||"";
+  const selected=customRuleFor(id,slot,selectedId);
+  let actual=selected?applyCustomRule(base,h,selected):specialCooldown(id,slot,base,h);
+  let control="";
+  if(special==="pantheonQ")control=`<label class="small">使用方法</label><select class="special-mode" data-champ="${id}" data-slot="${slot}"><option value="tap" ${modeValue==="tap"?"selected":""}>短押し（CD60%返還）</option><option value="normal" ${modeValue==="normal"?"selected":""}>長押し（通常CD）</option></select>`;
+  if(special==="dianaE")control=`<label class="small">対象の状態</label><select class="special-mode" data-champ="${id}" data-slot="${slot}"><option value="normal" ${modeValue==="normal"?"selected":""}>月光なし（通常CD）</option><option value="moonlight" ${modeValue==="moonlight"?"selected":""}>月光あり（0.25秒）</option></select>`;
+  if(special==="kaisaW")control=`<label class="small">Wの状態</label><select class="special-mode" data-champ="${id}" data-slot="${slot}"><option value="normal" ${modeValue==="normal"?"selected":""}>未進化 / 命中なし</option><option value="evolvedHit" ${modeValue==="evolvedHit"?"selected":""}>進化後・チャンピオン命中（75%返還）</option></select>`;
+  if(id==="Thresh"&&slot==="Q")control=`<label class="small">Qの命中状態</label><select class="special-mode" data-champ="${id}" data-slot="${slot}"><option value="normal" ${modeValue==="normal"?"selected":""}>命中なし</option><option value="hit" ${modeValue==="hit"?"selected":""}>敵に命中（2秒短縮）</option></select>`;
+  if(available.length)control+=`<div style="margin-top:7px"><label class="small">共有特殊CDルール</label><select class="special-mode" data-champ="${id}" data-slot="${slot}" data-custom="1"><option value="">組み込み設定 / 通常CD</option>${available.map(r=>`<option value="${escapeHTML(r.id)}" ${selectedId===r.id?"selected":""}>${escapeHTML(r.label)}</option>`).join("")}</select>${selected?`<div class="small">${escapeHTML(selected.condition_text)}</div>`:""}</div>`;
+  html+=`<div class="skill"><img src="${spellImage(s.image.full)}"><div class="skillinfo"><div class="skillname">${slot} - ${escapeHTML(s.name)}</div><div class="muted">基本CD：${base}秒</div><div style="margin-top:7px"><span class="small">スキルLv</span> <select class="level" data-champ="${id}" data-slot="${slot}">${Array.from({length:max},(_,j)=>`<option value="${j+1}" ${level===j+1?"selected":""}>${j+1}</option>`).join("")}</select></div>${control}</div><div class="cd">${formatCD(actual)}<div class="small">CD</div></div></div>`;
+ });
+ return html+"</div>";
+}
+async function render(){
+ const ids=[$("champ1").value];if($("compare").checked&&$("champ2").value)ids.push($("champ2").value);
+ const unique=[...new Set(ids.filter(Boolean))];if(!unique.length)return;
+ $("results").innerHTML="<div class='panel'>読み込み中...</div>";
+ try{const data=await Promise.all(unique.map(getChampion));$("results").innerHTML=data.map(createChampionCard).join("");$("totalAH").textContent=totalAH();$("totalSS").textContent=totalSS()}
+ catch(e){console.error(e);$("results").textContent="チャンピオンの取得に失敗しました。"}
+}
+async function getChampion(id){
+ if(cache[id])return cache[id];
+ const data=await fetch(`${BASE}/cdn/${version}/data/ja_JP/champion/${id}.json`).then(r=>r.json());
+ cache[id]=data.data[id];return cache[id];
+}
+function showChampions(){
+ const keyword=$("search").value.toLowerCase(),filtered=champions.filter(c=>(c.name+" "+c.id+" "+c.title).toLowerCase().includes(keyword));
+ const old1=$("champ1").value,old2=$("champ2").value;
+ $("champ1").innerHTML=filtered.map(c=>`<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)}</option>`).join("");
+ $("champ2").innerHTML=champions.map(c=>`<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)}</option>`).join("");
+ if(filtered.some(c=>c.id===old1))$("champ1").value=old1;else if(filtered.length)$("champ1").value=filtered[0].id;
+ if(champions.some(c=>c.id===old2))$("champ2").value=old2;
+}
+function showSummoners(){
+ const classic=summoners.filter(s=>!s.modes||s.modes.includes("CLASSIC")),options=classic.map(s=>`<option value="${escapeHTML(s.id)}">${escapeHTML(s.name)}</option>`).join("");
+ $("sum1").innerHTML=options;$("sum2").innerHTML=options;
+ const flash=classic.find(s=>s.id==="SummonerFlash"),teleport=classic.find(s=>s.id==="SummonerTeleport");
+ if(flash)$("sum1").value=flash.id;if(teleport)$("sum2").value=teleport.id;renderSummoners();
+}
+function renderSummoners(){
+ ["sum1","sum2"].forEach((selectId,i)=>{
+  const s=summoners.find(x=>x.id===$(selectId).value),target=$("sumResult"+(i+1));
+  if(!s){target.textContent="データなし";return}
+  const base=Number(s.cooldown||0),actual=calculateCD(base,totalSS());
+  target.innerHTML=`<img src="${spellImage(s.image.full)}"><div><strong>${escapeHTML(s.name)}</strong><div class="muted">基本CD：${base}秒</div><div style="color:#e8c879;font-weight:bold">${formatCD(actual)}</div></div>`;
+ });
+}
+async function init(){
+ try{
+  const versions=await fetch(`${BASE}/api/versions.json`).then(r=>r.json());version=versions[0];$("patch").textContent="Patch "+version;
+  const [champData,sumData]=await Promise.all([fetch(`${BASE}/cdn/${version}/data/ja_JP/champion.json`).then(r=>r.json()),fetch(`${BASE}/cdn/${version}/data/ja_JP/summoner.json`).then(r=>r.json())]);
+  champions=Object.values(champData.data);summoners=Object.values(sumData.data);champions.sort((a,b)=>a.name.localeCompare(b.name,"ja"));
+  showChampions();$("ruleChampion").innerHTML=champions.map(c=>`<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)} (${escapeHTML(c.id)})</option>`).join("");
+  const ahri=champions.find(c=>c.id==="Ahri"),yasuo=champions.find(c=>c.id==="Yasuo");
+  if(ahri)$("champ1").value="Ahri";if(yasuo)$("champ2").value="Yasuo";
+  showSummoners();await loadSharedRules();await render();
+  $("status").textContent=champions.length+"体のチャンピオンを読み込みました。特殊CDルールはSupabaseと同期します。";
+ }catch(e){console.error(e);$("status").textContent="初期化に失敗しました。ネット接続とSupabase設定を確認してください。"}
+}
+$("search").addEventListener("input",()=>{showChampions();render()});
+$("champ1").addEventListener("change",render);$("champ2").addEventListener("change",render);$("compare").addEventListener("change",render);
+["haste","extra","runeAH","runeSS"].forEach(id=>$(id).addEventListener("input",()=>{ $("totalAH").textContent=totalAH();$("totalSS").textContent=totalSS();render();renderSummoners()}));
+$("sum1").addEventListener("change",renderSummoners);$("sum2").addEventListener("change",renderSummoners);
+$("results").addEventListener("change",e=>{
+ if(e.target.matches(".level")){setLevel(e.target.dataset.champ,e.target.dataset.slot,Number(e.target.value));render();return}
+ if(e.target.matches(".special-mode")){
+  const key=e.target.dataset.champ+"_"+e.target.dataset.slot;
+  if(e.target.dataset.custom==="1")state.specialModes[key+"_custom"]=e.target.value;
+  else state.specialModes[key]=e.target.value;
+  render();
+ }
+});
+$("loginBtn").addEventListener("click",login);$("logoutBtn").addEventListener("click",logout);
+$("ruleForm").addEventListener("submit",saveRule);$("cancelEditBtn").addEventListener("click",clearRuleForm);
+$("ruleList").addEventListener("click",e=>{
+ const edit=e.target.dataset.editRule,del=e.target.dataset.deleteRule;
+ if(edit)editRule(edit);if(del)deleteRule(del);
+});
+db.auth.onAuthStateChange(()=>{setTimeout(refreshAuth,0)});
+(async()=>{await refreshAuth();await init()})();
+</script>
+</body>
+</html>
+
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
