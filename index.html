@@ -228,6 +228,24 @@ function createChampionCard(c){
   if(special==="dianaE")control=`<label class="small">対象の状態</label><select class="special-mode" data-champ="${id}" data-slot="${slot}"><option value="normal" ${modeValue==="normal"?"selected":""}>月光なし（通常CD）</option><option value="moonlight" ${modeValue==="moonlight"?"selected":""}>月光あり（0.25秒）</option></select>`;
   if(special==="kaisaW")control=`<label class="small">Wの状態</label><select class="special-mode" data-champ="${id}" data-slot="${slot}"><option value="normal" ${modeValue==="normal"?"selected":""}>未進化 / 命中なし</option><option value="evolvedHit" ${modeValue==="evolvedHit"?"selected":""}>進化後・チャンピオン命中（75%返還）</option></select>`;
   if(id==="Thresh"&&slot==="Q")control=`<label class="small">Qの命中状態</label><select class="special-mode" data-champ="${id}" data-slot="${slot}"><option value="normal" ${modeValue==="normal"?"selected":""}>命中なし</option><option value="hit" ${modeValue==="hit"?"selected":""}>敵に命中（2秒短縮）</option></select>`;
+  if(id==="Ahri"&&slot==="R"){
+  const takedowns=Math.min(3,Math.max(0,Number(state.specialModes.Ahri_R)||0));
+  control+=`
+    <div style="margin-top:7px">
+      <label class="small">Rのキル・アシスト回数</label>
+      <select class="special-mode" data-champ="Ahri" data-slot="R">
+        ${[0,1,2,3].map(n=>`
+          <option value="${n}" ${takedowns===n?"selected":""}>
+            ${n}回
+          </option>
+        `).join("")}
+      </select>
+      <div class="small">
+        Rの使用可能回数：${3+takedowns}回
+      </div>
+    </div>
+  `;
+}
   if(available.length)control+=`<div style="margin-top:7px"><label class="small">共有特殊CDルール</label><select class="special-mode" data-champ="${id}" data-slot="${slot}" data-custom="1"><option value="">組み込み設定 / 通常CD</option>${available.map(r=>`<option value="${escapeHTML(r.id)}" ${selectedId===r.id?"selected":""}>${escapeHTML(r.label)}</option>`).join("")}</select>${selected?`<div class="small">${escapeHTML(selected.condition_text)}</div>`:""}</div>`;
   html+=`<div class="skill"><img src="${spellImage(s.image.full)}"><div class="skillinfo"><div class="skillname">${slot} - ${escapeHTML(s.name)}</div><div class="muted">基本CD：${base}秒</div><div style="margin-top:7px"><span class="small">スキルLv</span> <select class="level" data-champ="${id}" data-slot="${slot}">${Array.from({length:max},(_,j)=>`<option value="${j+1}" ${level===j+1?"selected":""}>${j+1}</option>`).join("")}</select></div>${control}</div><div class="cd">${formatCD(actual)}<div class="small">CD</div></div></div>`;
  });
